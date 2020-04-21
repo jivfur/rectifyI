@@ -1,6 +1,33 @@
-Many Geographical Analysis utilizes spatial autocorrelation, that allows us to study the geographical evolution from different points of view. One measurement for spatial autocorrelation is Moran's I, that is based on Pearson’s correlation coefficient in general statistics [<arXiv:1606.03658>](https://arxiv.org/abs/1606.03658)
+---
+title: "Moran's I rescaling"
+author: "Ivan Fuentes, Thomas Dewiit, Thomas Ioerger, Michael Bishop"
+date: "`r Sys.Date()`"
+bibliography: "../inst/REFERENCES.bib"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Moran's I rescaling}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+Many Geographical Analysis utilizes spatial autocorrelation, that allows us to study the geographical evolution from different points of view. One measurement for spatial autocorrelation is Moran's I, that is based on Pearson’s correlation coefficient in general statistics [@chen2009] 
+
 ## Performing the Analysis
-This package offers a  straight fordward to perform the whole analisys by using the function `rescaleI` which requires an input file with a specific format you can see it at [Loading data] section
+This package offers two ways to rectify Moran's I. The first method is a Procrustes method, and the second one is a rectifying through Pearson correlation. We provided a straight forward way to perform both techniques. 
+
+### Procrustes method
+invited every passer-by to spend the night. If the guess were too short, Procrustes would stretch him to fit, or If the guest proved too tall, Procrustes would amputate the excess length.  Keeping Procrustes's myth in mind, what this technique does is to stretch or cut as necessary to make the Moran's I null distribution to fit a Normal Curve, making the max and min or 99.99% - 0.1% quantile,  values to match. 
+
+The package offers, as stated before, a direct way to apply the Procrustes technique to a data set. The function `rescaleI` requires an input file path, the number of samples to create the null distribution, and a parameter that establishes up to which value the Moran's I value will be stretch.
+
+The [Loading data] section explains the required format of the input file. The parameter `scalingUpTo`  accepts two string values, "MaxMin" and "Quantile." The first value is self-explanatory, while the second one refers to the quantiles 0.1% and 99.99%. The default value is "Quantile," meaning that, if something different to "MaxMin" or "Quantile" is sent, the `iCorrection` function will apply "Quantile."
 
 ```{r whole_analysis}
 library(Irescale)
@@ -14,12 +41,10 @@ if (file.exists(fn))
   file.remove(fn)
 ```
 
-
-
 ## Analysis Step by Step
-The analysis can be done following the steps
+The method rescaleI is a wrap for a pipeline that can be executed step by step.
 
-### Loading data
+###Loading data
 
 The input file^[The data used in this example is taken from [@chen2009].] should have the following format.
 
@@ -102,7 +127,7 @@ fileInput<-system.file("testdata", "chen.csv", package="Irescale")
 input<-loadFile(fileInput)
 distM<-calculateEuclideanDistance(input$data)
 I<-calculateMoranI(distM = distM,varOfInterest = input$varOfInterest)
-vI<-resamplingI(1000,distM, input$varOfInterest) # This is the permutation
+vI<-resamplingI(distM, input$varOfInterest) # This is the permutation
 statsVI<-summaryVector(vI)
 statsVI
 ```
@@ -115,12 +140,12 @@ fileInput<-system.file("testdata", "chen.csv", package="Irescale")
 input<-loadFile(fileInput)
 distM<-calculateEuclideanDistance(input$data)
 I<-calculateMoranI(distM = distM,varOfInterest = input$varOfInterest)
-vI<-resamplingI(1000,distM, input$varOfInterest) # This is the permutation
+vI<-resamplingI(distM, input$varOfInterest) # This is the permutation
 statsVI<-summaryVector(vI)
 plotHistogramOverlayNormal(vI,statsVI, main=colnames(input$varOfInterest))
 ```
 
-### Rescaling I
+### Rectifying I 
 
 Once we have calculated the null distribution via resampling, you need to scale by centering and streching. The method `iCorrection`, return an object with the resampling vector rescaled, and all the summary for this vector, the new value of I is returned in a variable named `newI` 
 
@@ -130,13 +155,13 @@ fileInput<-system.file("testdata", "chen.csv", package="Irescale")
 input<-loadFile(fileInput)
 distM<-calculateEuclideanDistance(input$data)
 I<-calculateMoranI(distM = distM,varOfInterest = input$varOfInterest)
-vI<-resamplingI(1000,distM, input$varOfInterest) # This is the permutation
+vI<-resamplingI(distM, input$varOfInterest) # This is the permutation
 statsVI<-summaryVector(vI)
 corrections<-iCorrection(I,vI)
 corrections$newI
 ```
 
-## Calculate P-value
+##Calculate P-value
 In order to provide a significance to this new value, you can calculate the pvalue using the method `calculatePvalue`. This method requires the scaled vector, you get this vector,`scaledData`, the scaled I, `newI` and the mean of the `scaledData`.
 
 
@@ -146,18 +171,29 @@ fileInput<-system.file("testdata", "chen.csv", package="Irescale")
 input<-loadFile(fileInput)
 distM<-calculateEuclideanDistance(input$data)
 I<-calculateMoranI(distM = distM,varOfInterest = input$varOfInterest)
-vI<-resamplingI(1000,distM, input$varOfInterest) # This is the permutation
+vI<-resamplingI(distM, input$varOfInterest) # This is the permutation
 statsVI<-summaryVector(vI)
 corrections<-iCorrection(I,vI)
 pvalueIscaled<-calculatePvalue(corrections$scaledData,corrections$newI,corrections$summaryScaledD$mean)
 pvalueIscaled
 ```
 
-## Stability Analysis
+##Stability Analysis
 In order to determine how many iterations it is necessary to run the resampling method, it is possible to run a stability analysis. This function draw a chart in log scale (10^x) of the number of interations needed to achieve the stability in the Monte Carlo simulation.
-
+###Rectifying to "Max-Min"
 ```{r}
+library(Irescale)
 fileInput<-system.file("testdata", "chen.csv", package="Irescale")
 input<-loadFile(fileInput)
-resultsChen<-buildStabilityTable(data=input, times=100, samples=1000, plots=TRUE)
+resultsChen<-buildStabilityTable(data=input, times=10, samples=10^3, plots=TRUE)
 ```
+
+### Rectifying with correlation
+```{r}
+fileInput <- system.file("testdata", "chen.csv", package="Irescale")
+data <- loadFile(fileInput)
+resultsChen<-buildStabilityTableForCorrelation(data=data,times=10,samples=10^3,plots=TRUE)
+```
+
+
+# References
